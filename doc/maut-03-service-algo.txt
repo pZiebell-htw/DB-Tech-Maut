@@ -1,0 +1,33 @@
+﻿float berechneMaut(int mautAbschnitt, int achszahl, String kennzeichen)
+
+if isFahrzeugImAutomatikverfahren then
+  Prüfung Achsen -> Fehler: InvalidVehicleDataException
+  Abschnittslänge ermitteln
+  Kosten je Kilometer ermitteln
+  Mautkosten berechnen (Einheiten beachten: km/m, Cents/Euro)
+  Mautkosten auf 2 Stellen hinterm Komma berechnen
+  Datensatz in Mauterhebung eintragen
+else if isFahrzeugImManuellenVerfahren
+  Prüfung Achsen -> Fehler: InvalidVehicleDataException
+  Prüfung offene Buchung für Mautabschnitt -> Fehler: AlreadyCruisedException
+  Buchugsstatus und Befahrungszeitpunkt setzen
+else
+  UnknownVehicleException
+
+isFahrzeugImAutomatikverfahren
+  Zugriff auf Fahrzeug über Kennzeichen
+  Fahrzeug aktiv: ABMELDEDATUM IS NULL 
+  und 
+  Fahrzeuggerät aktiv: Status = 'active'  
+
+isFahrzeugImManuellenVerfahren
+  irgendeine Buchung für das Fahrzeug ist offen (B_ID = 1)
+
+Prüfung Achsen im Manuellen Verfahren
+  Fahrzeug hat bis zu 4 Achsen: direkter Vergleich
+  Fahrzeug hat 5 oder mehr Achsen: Vergleich mit  >= 5 
+
+Prüfung Achsen im Automatischen Verfahren
+  Echte Achsanzahl bei Fahrzeug
+  Fahrzeug hat bis zu 4 Achsen: direkter Vergleich
+  Fahrzeug hat 5 oder mehr Achsen: Vergleich mit  >= 5 

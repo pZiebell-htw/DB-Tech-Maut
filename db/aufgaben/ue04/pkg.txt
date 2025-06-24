@@ -1,0 +1,14 @@
+create or replace package maut_service as
+
+  unkown_vehicle exception;
+  pragma exception_init(unkown_vehicle, -20001);
+  invalid_vehicle_data exception;
+  pragma exception_init(invalid_vehicle_data, -20002);
+  already_cruised exception;
+  pragma exception_init(already_cruised, -20003);
+
+procedure berechnemaut(
+    p_mautabschnitt mautabschnitt.abschnitts_id%type,
+    p_achszahl fahrzeug.achsen%type,
+    p_kennzeichen fahrzeug.kennzeichen%type);
+end maut_service;

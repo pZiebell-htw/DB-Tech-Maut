@@ -1,0 +1,23 @@
+create or replace package body maut_service as
+
+  procedure test(
+    p_mautabschnitt mautabschnitt.abschnitts_id%type
+  ) as
+  begin
+    dbms_output.put_line('test');
+    dbms_output.put_line(p_mautabschnitt);
+  end test;
+
+  -----------------------------------------------------------------------------
+  -- berechnemaut
+  -----------------------------------------------------------------------------
+  procedure berechnemaut(
+    p_mautabschnitt mautabschnitt.abschnitts_id%type,
+    p_achszahl fahrzeug.achsen%type,
+    p_kennzeichen fahrzeug.kennzeichen%type
+  ) as
+  begin
+    test(p_mautabschnitt);
+  end berechnemaut;
+  
+end maut_service;

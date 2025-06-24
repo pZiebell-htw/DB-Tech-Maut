@@ -1,0 +1,4 @@
+REM INSERTING into RECHNUNNGSSTATUS
+Insert into RECHNUNNGSSTATUS (STATUS_ID,STATUS_BEZ) values (1,'offen');
+Insert into RECHNUNNGSSTATUS (STATUS_ID,STATUS_BEZ) values (2,'geschlossen');
+Insert into RECHNUNNGSSTATUS (STATUS_ID,STATUS_BEZ) values (3,'inkasso');
