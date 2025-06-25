@@ -23,7 +23,7 @@ Zur Bearbeitung der Aufgaben müssen sie das Datenmodell in ihrer eigenen Datenb
 - Beschreibung des Datenmodells
   [(pdf)](https://github.com/ic-htw/dbtech-maut/blob/main/doc/maut-beschreibung.pdf)
 - SQL-Code zur Erzeugung der Tabellen und zum Einfügen der Daten
-  [(link)](https://github.com/ic-htw/dbtech-vers/tree/main/db/versicherung)
+  [(link)](https://github.com/ic-htw/dbtech-maut/tree/main/db/maut)
 
 ## Logging
 
@@ -70,74 +70,70 @@ Diese Übung dient zur Wiederholung von SQL und zur Einarbeitung in die Struktur
 Die Bearbeitung dieser Übung ist freiwillig, eine Abgabe der Lösungen ist nicht erforderlich.
 
 - SQL-Aufgaben
-  [(link)](https://github.com/ic-htw/dbtech-vers/blob/main/db/aufgaben/ue01/vers-sql.pdf)
+  [(link)](https://github.com/ic-htw/dbtech-maut/blob/main/db/aufgaben/ue01/maut-sql.pdf)
 
-### Übung 2
+### Übung 2 (10 Punkte)
 
 Diese Übung dient zur Implementierung einfacher Dienste in Java. Dabei geht es im Wesentlichen um die Verwaltung der
 Daten.
 
 ```java
-public interface IVersicherungJdbc {
-  List<String> kurzBezProdukte();
-  Kunde findKundeById(Integer id);
-  void createVertrag(Integer id, Integer produktId, Integer kundenId, LocalDate versicherungsbeginn);
-  BigDecimal calcMonatsrate(Integer vertragsId);
-}
+public interface IMautVerwaltung {
+  String getStatusForOnBoardUnit(long fzg_id);
+  int getUsernumber(int maut_id);
+  void registerVehicle(long fz_id, int sskl_id, int nutzer_id, String kennzeichen, String fin, int achsen, int gewicht, String zulassungsland);
+  void updateStatusForOnBoardUnit(long fzg_id, String status);
+  void deleteVehicle(long fz_id);
+  List<Mautabschnitt> getTrackInformations(String abschnittstyp);
+  void setConnection(Connection connection);}
 ```
 
 Details zu den Diensten finden sie hier
-[(link)](https://github.com/ic-htw/dbtech-vers/blob/main/javasrc/de/htwberlin/dbtech/aufgaben/ue02/IVersicherungJdbc.java)
+[(link)](https://github.com/ic-htw/dbtech-maut/blob/main/javasrc/de/htwberlin/dbtech/aufgaben/ue02/IMautVerwaltung.java)
 
-### Übung 3
+Der Implementierung soll in der Klasse ```MautVerwaltungImpl``` erfolgen
 
-Diese Übung dient zur Implementierung eines komplexen Dienstes in Java. Dabei geht es um die Festlegung von Versicherungsbedingungen, z.B. die Deckung bestimmter Risiken.
+### Übung 3 (20 Punkte)
+
+Diese Übung dient zur Implementierung eines komplexen Dienstes in Java. Dabei geht es um die Mautabrechnung.
 
 ```java
-public interface IVersicherungService {
-  void createDeckung(Integer vertragsId, Integer deckungsartId, BigDecimal deckungsbetrag);
-}
+void berechneMaut(int mautAbschnitt, int achszahl, String kennzeichen) throws UnkownVehicleException, InvalidVehicleDataException, AlreadyCruisedException;
 ```
 
 Details zu dem Dienst finden sie hier
-[(link)](https://github.com/ic-htw/dbtech-vers/blob/main/javasrc/de/htwberlin/dbtech/aufgaben/ue03/IVersicherungService.java)
+[(link)](https://github.com/ic-htw/dbtech-maut/blob/main/javasrc/de/htwberlin/dbtech/aufgaben/ue03/IMautService.java)
 
-Hinweise zur Implementierung der Ablehnungsregeln finden sie hier [(pdf)](https://github.com/ic-htw/dbtech-vers/blob/main/doc/ablehnungsregeln.pdf)
+Hinweise zur Implementierung der Abrechnungslogik finden sie hier:
+- Ablaufdiagramm [(png)](https://github.com/ic-htw/dbtech-maut/blob/main/doc/maut-service-algo.png)
+- Pseudocode [(txt)](https://github.com/ic-htw/dbtech-maut/blob/main/doc/maut-service-algo.txt)
 
 Dieser Dienst soll in zwei Versionen implementiert werden:
 
-1. Implementierung wie bei Übung 2 in einer Klasse ```VersicherungService``` 
+1. Implementierung wie bei Übung 2 in einer Klasse ```MautServiceImpl``` 
 2. Implementierung auf Grundlage eines Architekturmusters (Table-Data-Gateway, Row-Data-Gateway oder Data-Mapper) in
-   einer Klasse ```VersicherungServiceDao``` und zusätzlichen Interfaces und Klassen zur Implementierung der DAOs
+   einer Klasse ```MautServiceImplDao``` und zusätzlichen Interfaces und Klassen zur Implementierung der DAOs
 
-### Übung 4
+### Übung 4 (10 Punkte)
 
 Diese Übung dient zur Implementierung eines komplexen Dienstes innerhalb des Datenbanksystems mit PL/SQL. Dabei soll der
 Dienst aus Übung 3 in diesem neuen Umfeld reimplementiert werden.
 
 ```sql
-create or replace package versicherungsservice as
-  exc_data exception;
-  pragma exception_init(exc_data, -20001);
-  exc_vertrag_existiert_nicht exception;
-  pragma exception_init(exc_vertrag_existiert_nicht, -20002);
-  exc_deckungsart_existiert_nicht exception;
-  pragma exception_init(exc_deckungsart_existiert_nicht, -20003);
-  exc_ungueltiger_deckungsbetrag exception;
-  pragma exception_init(exc_ungueltiger_deckungsbetrag, -20004);
-  exc_deckungsart_passt_nicht_zu_produkt exception;
-  pragma exception_init(exc_deckungsart_passt_nicht_zu_produkt, -20005);
-  exc_deckungsart_nicht_regelkonform exception;
-  pragma exception_init(exc_deckungsart_nicht_regelkonform, -20006);
-  exc_deckungspreis_nicht_vorhanden exception;
-  pragma exception_init(exc_deckungspreis_nicht_vorhanden, -20007);
+create or replace package maut_service as
+  unkown_vehicle exception;
+  pragma exception_init(unkown_vehicle, -20001);
+  invalid_vehicle_data exception;
+  pragma exception_init(invalid_vehicle_data, -20002);
+  already_cruised exception;
+  pragma exception_init(already_cruised, -20003);
 
-  procedure create_deckung (
-    p_vertrags_id vertrag.id%type,
-    p_deckungsart_id deckungsart.id%type,
-    p_deckungsbetrag deckung.deckungsbetrag%type);
-end versicherungsservice;
+  procedure berechnemaut(
+    p_mautabschnitt mautabschnitt.abschnitts_id%type,
+    p_achszahl fahrzeug.achsen%type,
+    p_kennzeichen fahrzeug.kennzeichen%type);
+end maut_service;
 ```
 
 PL/SQL-Code zu dieser Übung finden sie hier
-[(link)](https://github.com/ic-htw/dbtech-vers/tree/main/db/aufgaben/ue04)
+[(link)](https://github.com/ic-htw/dbtech-maut/tree/main/db/aufgaben/ue04)
