@@ -31,10 +31,9 @@ public class MautServiceImpl implements IMautService {
 	}
 
 	@Override
-	public float berechneMaut(int mautAbschnitt, int achszahl, String kennzeichen)
+	public void berechneMaut(int mautAbschnitt, int achszahl, String kennzeichen)
 			throws UnkownVehicleException, InvalidVehicleDataException, AlreadyCruisedException {
 		// TODO Auto-generated method stub
-		return 0;
 	}
 
 

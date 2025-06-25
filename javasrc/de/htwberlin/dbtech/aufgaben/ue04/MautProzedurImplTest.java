@@ -1,5 +1,6 @@
-package de.htwberlin.dbtech.aufgaben.ue03;
+package de.htwberlin.dbtech.aufgaben.ue04;
 
+import de.htwberlin.dbtech.aufgaben.ue03.IMautService;
 import de.htwberlin.dbtech.exceptions.AlreadyCruisedException;
 import de.htwberlin.dbtech.exceptions.InvalidVehicleDataException;
 import de.htwberlin.dbtech.exceptions.UnkownVehicleException;
@@ -11,6 +12,7 @@ import org.dbunit.database.IDatabaseConnection;
 import org.dbunit.database.QueryDataSet;
 import org.dbunit.dataset.IDataSet;
 import org.dbunit.dataset.ITable;
+import org.dbunit.dataset.RowOutOfBoundsException;
 import org.dbunit.dataset.csv.CsvDataSet;
 import org.dbunit.operation.DatabaseOperation;
 import org.junit.AfterClass;
@@ -22,7 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 /**
  * Die Klasse enthaelt die Testfaelle fuer die Methoden des Mautservice
@@ -30,11 +32,11 @@ import static org.junit.Assert.assertEquals;
  * @author Patrick Dohmeier
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class MautServiceTest {
-    private static final Logger L = LoggerFactory.getLogger(MautServiceTest.class);
+public class MautProzedurImplTest {
+    private static final Logger L = LoggerFactory.getLogger(MautProzedurImplTest.class);
     private static IDatabaseConnection dbTesterCon = null;
 
-    private static final IMautService maut = new MautServiceImpl();
+    private static final IMautService maut = new MautProzedurImpl();
 
     @BeforeClass
     public static void setUp() {
@@ -92,8 +94,8 @@ public class MautServiceTest {
     public void testMauterhebung_3() {
         // Das Fahrzeug ist bekannt und im Manuellen Verfahren unterwegs.
         // Gebucht wurde aber eine falsche Mautkategorie, sprich eine falsche
-        // Achszahl. Der Fahrer bezahlt also weniger Maut f�r die
-        // Streckenbefahrung als er m�sste. Dies f�hrt zu einer
+        // Achszahl. Der Fahrer bezahlt also weniger Maut fuer die
+        // Streckenbefahrung als er muesste. Dies fuehrt zu einer
         // InvalidVehicleDataException.
         maut.berechneMaut(1200, 3, "B CV 8890");
     }
@@ -138,14 +140,27 @@ public class MautServiceTest {
      *
      */
     @org.junit.Test
-    public void testMauterhebung_6()  {
+    public void testMauterhebung_6()  throws Exception {
         // Das Fahrzeug ist bekannt & aktiv, sowie mit einem Fahrzeuggeraet
         // ausgestattet und im Automatischen Verfahren unterwegs.
         // Die Hoehe der Maut wird anhand des gefahrenen Abschnitts und der
         // Mautkategorie berechnet und verbucht.
-        float maut_berechnet = maut.berechneMaut(1433, 5, "M 6569");
+        // Achtung, die Id der neuen Mauterhebung muss so gewaehlt werden, dass sie groesser
+        // als der bisherige maximale Wert ist.
+        maut.berechneMaut(1433, 5, "M 6569");
 
-        assertEquals("Die Berechnung der Maut war nicht korrekt", "0.68", Float.toString(maut_berechnet));
+        try {
+            // hole Daten aus der aktuellen Tabelle MAUTERHEBUNG
+            QueryDataSet databaseDataSet = new QueryDataSet(dbTesterCon);
+            String sql = "select * from MAUTERHEBUNG order by maut_id asc";
+            databaseDataSet.addTable("MAUTERHEBUNG", sql);
+            ITable actualTable = databaseDataSet.getTable("MAUTERHEBUNG");
+
+            assertEquals("Die Berechnung der Maut war nicht korrekt", "0.68",
+                    actualTable.getValue(18, "KOSTEN").toString().replace(',', '.'));
+        } catch (RowOutOfBoundsException e) {
+            fail("Es wurde keine Mauterhebung im Automatischen Verfahren gespeichert");
+        }
     }
 
 }

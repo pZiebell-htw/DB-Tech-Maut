@@ -16,23 +16,20 @@ public interface IMautService {
 	/***
 	 * Die Methode realisiert einen Algorithmus, der die übermittelten
 	 * Fahrzeugdaten mit der Datenbank auf Richtigkeit überprüft und für einen
-	 * mautpflichtigen Streckenabschnitt die zu zahlende Maut für ein Fahrzeug
-	 * im Automatischen Verfahren berechnet.
-	 * 
-	 * Zuvor wird überprüft, ob das Fahrzeug registriert ist und über ein
-	 * eingebautes Fahrzeuggerät verfügt und die übermittelten Daten des
-	 * Kontrollsystems korrekt sind. Bei Fahrzeugen im Manuellen Verfahren wird
-	 * darüberhinaus geprüft, ob es noch offene Buchungen für den Mautabschnitt
-	 * gibt oder eine Doppelbefahrung aufgetreten ist. Besteht noch eine offene
-	 * Buchung für den Mautabschnitt, so wird diese Buchung für das Fahrzeug auf
-	 * abgeschlossen gesetzt.
-	 * 
+	 * mautpflichtigen Streckenabschnitt entweder eine Buchung im Manuellen
+	 * Verfahren schliesst oder die zu zahlende Maut für ein Fahrzeug
+	 * im Automatischen Verfahren berechnet und eine entsprechende Mauterhebung speichert.
+	 *
 	 * Sind die Daten des Fahrzeugs im Automatischen Verfahren korrekt, wird
 	 * anhand der Mautkategorie (die sich aus der Achszahl und der
 	 * Schadstoffklasse des Fahrzeugs zusammensetzt) und der Mautabschnittslänge
-	 * die zu zahlende Maut berechnet, in der Mauterhebung gespeichert und
-	 * letztendlich zurückgegeben.
-	 * 
+	 * die zu zahlende Maut berechnet und in der Mauterhebung gespeichert.
+	 *
+	 * Bei Fahrzeugen im Manuellen Verfahren wird darüberhinaus geprüft,
+	 * ob es noch offene Buchungen für den Mautabschnitt
+	 * gibt oder eine Doppelbefahrung aufgetreten ist. Besteht noch eine offene
+	 * Buchung für den Mautabschnitt, so wird diese Buchung für das Fahrzeug auf
+	 * abgeschlossen gesetzt.
 	 * 
 	 * @param mautAbschnitt
 	 *            - identifiziert einen mautpflichtigen Abschnitt
@@ -54,7 +51,7 @@ public interface IMautService {
 	 * @return die berechnete Maut für das Fahrzeug im Automatischen Verfahren
 	 *         auf dem Streckenabschnitt anhand der Fahrzeugdaten
 	 */
-	float berechneMaut(int mautAbschnitt, int achszahl, String kennzeichen)
+	void berechneMaut(int mautAbschnitt, int achszahl, String kennzeichen)
 			throws UnkownVehicleException, InvalidVehicleDataException,
 			AlreadyCruisedException;
 	
