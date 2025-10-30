@@ -1,6 +1,7 @@
 package de.htwberlin.dbtech.aufgaben.ue02;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement; // Wichtig: Import hinzufügen
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -11,72 +12,84 @@ import de.htwberlin.dbtech.exceptions.DataException;
 
 /**
  * Die Klasse realisiert die Mautverwaltung.
- * 
- * @author Patrick Dohmeier
+ * * @author Patrick Dohmeier
  */
 public class MautVerwaltungImpl implements IMautVerwaltung {
 
-	private static final Logger L = LoggerFactory.getLogger(MautVerwaltungImpl.class);
-	private Connection connection;
+    private static final Logger L = LoggerFactory.getLogger(MautVerwaltungImpl.class);
+    private Connection connection;
 
-	@Override
-	public void setConnection(Connection connection) {
-		this.connection = connection;
-	}
+    @Override
+    public void setConnection(Connection connection) {
+        this.connection = connection;
+    }
 
-	private Connection getConnection() {
-		if (connection == null) {
-			throw new DataException("Connection not set");
-		}
-		return connection;
-	}
+    private Connection getConnection() {
+        if (connection == null) {
+            throw new DataException("Connection not set");
+        }
+        return connection;
+    }
 
-	@Override
-	public String getStatusForOnBoardUnit(long fzg_id) {
-		String s = null;
-		try(Statement statement = connection.createStatement()) {
-			ResultSet resultSet = statement.executeQuery(
-					"SELECT g.status FROM Fahrzeuggerat g WHERE g.fzg_id = " + fzg_id);
-			if (resultSet.next()) {
-				s = resultSet.getString("status");
+    @Override
+    public String getStatusForOnBoardUnit(long fzg_id) {
+        String status = null;
+        // Das SQL-Statement, um den Status basierend auf der fzg_id zu finden.
+        // Das '?' ist ein Platzhalter.
+        String sql = "SELECT status FROM FAHRZEUGGERAT WHERE fzg_id = ?";
 
-			}
-		} catch (SQLException e) {
-			throw new RuntimeException(e);
-		}
-		// TODO Auto-generated method stub
-		return s;
-	}
+        // Wir verwenden ein PreparedStatement, um SQL-Injection zu verhindern
+        // und den Parameter sicher zu setzen.
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
 
-	@Override
-	public int getUsernumber(int maut_id) {
-		// TODO Auto-generated method stub
-		return 0;
-	}
+            // Setze den Wert für den ersten Platzhalter (?) auf die übergebene fzg_id
+            pstmt.setLong(1, fzg_id);
 
-	@Override
-	public void registerVehicle(long fz_id, int sskl_id, int nutzer_id, String kennzeichen, String fin, int achsen,
-			int gewicht, String zulassungsland) {
-		// TODO Auto-generated method stub
+            // Führe die Abfrage aus
+            try (ResultSet rs = pstmt.executeQuery()) {
 
-	}
+                // Prüfe, ob ein Datensatz gefunden wurde
+                if (rs.next()) {
+                    // Lese den Wert aus der Spalte "status"
+                    status = rs.getString("status");
+                }
+            }
+        } catch (SQLException e) {
+            // Wirf eine DataException, falls ein SQL-Fehler auftritt
+            throw new DataException(e);
+        }
 
-	@Override
-	public void updateStatusForOnBoardUnit(long fzg_id, String status) {
-		// TODO Auto-generated method stub
+        return status;
+    }
 
-	}
+    @Override
+    public int getUsernumber(int maut_id) {
+        // TODO Auto-generated method stub
+        return 0;
+    }
 
-	@Override
-	public void deleteVehicle(long fz_id) {
-		// TODO Auto-generated method stub
+    @Override
+    public void registerVehicle(long fz_id, int sskl_id, int nutzer_id, String kennzeichen, String fin, int achsen,
+                                int gewicht, String zulassungsland) {
+        // TODO Auto-generated method stub
 
-	}
+    }
 
-	@Override
-	public List<Mautabschnitt> getTrackInformations(String abschnittstyp) {
-		// TODO Auto-generated method stub
-		return null;
-	}
+    @Override
+    public void updateStatusForOnBoardUnit(long fzg_id, String status) {
+        // TODO Auto-generated method stub
 
+    }
+
+    @Override
+    public void deleteVehicle(long fz_id) {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public List<Mautabschnitt> getTrackInformations(String abschnittstyp) {
+        // TODO Auto-generated method stub
+        return null;
+    }
 }
