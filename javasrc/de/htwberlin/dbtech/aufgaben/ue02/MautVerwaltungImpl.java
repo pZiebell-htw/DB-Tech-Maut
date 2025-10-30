@@ -2,6 +2,7 @@ package de.htwberlin.dbtech.aufgaben.ue02;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement; // Wichtig: Import hinzufügen
+import java.util.ArrayList; // <--- DIESEN IMPORT HINZUFÜGEN
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -64,8 +65,31 @@ public class MautVerwaltungImpl implements IMautVerwaltung {
 
     @Override
     public int getUsernumber(int maut_id) {
-        // TODO Auto-generated method stub
-        return 0;
+        int nutzerId = 0; // Standardwert, falls nichts gefunden wird
+
+        // SQL-Query mit JOINs über 3 Tabellen
+        String sql = "SELECT T3.NUTZER_ID " +
+                "FROM MAUTERHEBUNG T1 " +
+                "JOIN FAHRZEUGGERAT T2 ON T1.FZG_ID = T2.FZG_ID " +
+                "JOIN FAHRZEUG T3 ON T2.FZ_ID = T3.FZ_ID " +
+                "WHERE T1.MAUT_ID = ?";
+
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+
+            // Den maut_id Parameter in den Platzhalter (?) einfügen
+            pstmt.setInt(1, maut_id);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    // Den Wert aus der Spalte NUTZER_ID auslesen
+                    nutzerId = rs.getInt("NUTZER_ID");
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataException(e);
+        }
+
+        return nutzerId;
     }
 
     @Override
@@ -77,8 +101,22 @@ public class MautVerwaltungImpl implements IMautVerwaltung {
 
     @Override
     public void updateStatusForOnBoardUnit(long fzg_id, String status) {
-        // TODO Auto-generated method stub
+        String sql = "UPDATE FAHRZEUGGERAT SET STATUS = ? WHERE FZG_ID = ?";
 
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+
+            // Parameter setzen:
+            // 1. Platzhalter (?) ist der STATUS (String)
+            pstmt.setString(1, status);
+            // 2. Platzhalter (?) ist die FZG_ID (long)
+            pstmt.setLong(2, fzg_id);
+
+            // executeUpdate() wird für INSERT, UPDATE oder DELETE verwendet
+            pstmt.executeUpdate();
+
+        } catch (SQLException e) {
+            throw new DataException(e);
+        }
     }
 
     @Override
