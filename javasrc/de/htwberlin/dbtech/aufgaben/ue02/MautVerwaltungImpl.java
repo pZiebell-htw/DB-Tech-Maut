@@ -93,10 +93,26 @@ public class MautVerwaltungImpl implements IMautVerwaltung {
     }
 
     @Override
-    public void registerVehicle(long fz_id, int sskl_id, int nutzer_id, String kennzeichen, String fin, int achsen,
-                                int gewicht, String zulassungsland) {
-        // TODO Auto-generated method stub
+    public void registerVehicle(long fz_id, int sskl_id, int nutzer_id, String kennzeichen, String fin, int achsen, int gewicht, String zulassungsland) {
 
+        // Der Testkommentar erwähnt ein "Systemdatum".
+        // Wir verwenden SYSDATE, die Oracle-Funktion für das aktuelle Datum.
+        String sql = "INSERT INTO FAHRZEUG (FZ_ID, SSKL_ID, NUTZER_ID, KENNZEICHEN, FIN, ACHSEN, GEWICHT, ZULASSUNGSLAND, ANMELDEDATUM) " + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, SYSDATE)";
+
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+            pstmt.setLong(1, fz_id);
+            pstmt.setInt(2, sskl_id);
+            pstmt.setInt(3, nutzer_id);
+            pstmt.setString(4, kennzeichen);
+            pstmt.setString(5, fin);
+            pstmt.setInt(6, achsen);
+            pstmt.setInt(7, gewicht);
+            pstmt.setString(8, zulassungsland);
+
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new DataException(e);
+        }
     }
 
     @Override
@@ -121,8 +137,14 @@ public class MautVerwaltungImpl implements IMautVerwaltung {
 
     @Override
     public void deleteVehicle(long fz_id) {
-        // TODO Auto-generated method stub
+        String sql = "DELETE FROM FAHRZEUG WHERE FZ_ID = ?";
 
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+            pstmt.setLong(1, fz_id);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new DataException(e);
+        }
     }
 
     @Override
