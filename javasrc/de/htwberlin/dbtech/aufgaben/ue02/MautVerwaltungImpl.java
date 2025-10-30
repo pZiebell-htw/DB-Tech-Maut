@@ -149,7 +149,42 @@ public class MautVerwaltungImpl implements IMautVerwaltung {
 
     @Override
     public List<Mautabschnitt> getTrackInformations(String abschnittstyp) {
-        // TODO Auto-generated method stub
-        return null;
+        // 1. Eine leere Liste erstellen (behebt die NullPointerException)
+        List<Mautabschnitt> abschnitte = new ArrayList<>();
+
+        String sql = "SELECT * FROM MAUTABSCHNITT WHERE ABSCHNITTSTYP = ?";
+
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+            pstmt.setString(1, abschnittstyp);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    Mautabschnitt m = new Mautabschnitt();
+
+                    // KORREKTUR 1:
+                    // Verwende setAbschnitts_id (mit Unterstrich)
+                    // Verwende rs.getInt() (da die Methode ein int erwartet)
+                    m.setAbschnitts_id(rs.getInt("ABSCHNITTS_ID"));
+
+                    // KORREKTUR 2:
+                    // Verwende rs.getInt() (da die Methode ein int erwartet)
+                    m.setLaenge(rs.getInt("LAENGE"));
+
+                    // Diese waren schon korrekt
+                    m.setStart_koordinate(rs.getString("START_KOORDINATE"));
+                    m.setZiel_koordinate(rs.getString("ZIEL_KOORDINATE"));
+                    m.setName(rs.getString("NAME"));
+                    m.setAbschnittstyp(rs.getString("ABSCHNITTSTYP"));
+
+                    abschnitte.add(m);
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataException(e);
+        }
+
+        // KORREKTUR 3:
+        // Gib die Liste zurück, nicht null. (Das war der NullPointerException-Fehler)
+        return abschnitte;
     }
 }
