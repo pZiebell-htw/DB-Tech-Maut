@@ -68,11 +68,11 @@ public class MautVerwaltungImpl implements IMautVerwaltung {
         int nutzerId = 0; // Standardwert, falls nichts gefunden wird
 
         // SQL-Query mit JOINs über 3 Tabellen
-        String sql = "SELECT T3.NUTZER_ID " +
-                "FROM MAUTERHEBUNG T1 " +
-                "JOIN FAHRZEUGGERAT T2 ON T1.FZG_ID = T2.FZG_ID " +
-                "JOIN FAHRZEUG T3 ON T2.FZ_ID = T3.FZ_ID " +
-                "WHERE T1.MAUT_ID = ?";
+        String sql = "SELECT f.NUTZER_ID " +
+                "FROM MAUTERHEBUNG m " +
+                "JOIN FAHRZEUGGERAT fg ON m.FZG_ID = fg.FZG_ID " +
+                "JOIN FAHRZEUG f ON fg.FZ_ID = f.FZ_ID " +
+                "WHERE m.MAUT_ID = ?";
 
         try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
 
