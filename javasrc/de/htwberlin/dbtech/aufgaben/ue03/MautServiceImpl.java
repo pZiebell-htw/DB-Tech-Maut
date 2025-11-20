@@ -16,6 +16,7 @@ import java.sql.SQLException;
  * 
  * @author Patrick Dohmeier
  */
+
 public class MautServiceImpl implements IMautService {
 
 	private static final Logger L = LoggerFactory.getLogger(MautServiceImpl.class);
@@ -88,7 +89,39 @@ public class MautServiceImpl implements IMautService {
             throw new DataException(e);
         }
 
-        // TODO: Hier geht es weiter mit Schritt 3...
+        // ---------------------------------------------------------
+        // SCHRITT 3: In welchem Verfahren befindet sich das Fahrzeug?
+        // ---------------------------------------------------------
+        boolean hatFahrzeugGeraet = false;
+        // Wir prüfen einfach, ob eine ID in der Tabelle FAHRZEUGGERAT existiert
+        String sqlCheckOBU = "SELECT FZG_ID FROM FAHRZEUGGERAT WHERE FZ_ID = ?";
+
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sqlCheckOBU)) {
+            pstmt.setLong(1, fahrzeugId);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    hatFahrzeugGeraet = true;
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataException(e);
+        }
+
+        // Verzweigung basierend auf dem Ergebnis
+        if (hatFahrzeugGeraet) {
+            // =========================================================
+            // SCHRITT 4a: Automatisches Verfahren
+            // =========================================================
+            // TODO: Maut berechnen und in MAUTERHEBUNG speichern
+
+        } else {
+            // =========================================================
+            // SCHRITT 4b: Manuelles Verfahren
+            // =========================================================
+            // TODO: Offene Buchung suchen und schließen
+
+        }
     }
 
 
