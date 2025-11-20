@@ -38,7 +38,8 @@ public class MautServiceImpl implements IMautService {
             throws UnkownVehicleException, InvalidVehicleDataException, AlreadyCruisedException {
 
         // Variable für die Fahrzeug-ID (brauchen wir später für weitere Schritte)
-        Integer fahrzeugId = null;
+        // KORREKTUR: Long statt Integer verwenden, da die IDs sehr groß sind
+        Long fahrzeugId = null;
 
         // ---------------------------------------------------------
         // SCHRITT 1: Ist das Fahrzeug bekannt?
@@ -52,7 +53,8 @@ public class MautServiceImpl implements IMautService {
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
                     // JA: Das Fahrzeug ist bekannt. Wir merken uns die ID.
-                    fahrzeugId = rs.getInt("FZ_ID");
+                    // KORREKTUR: getLong statt getInt!
+                    fahrzeugId = rs.getLong("FZ_ID");
                 } else {
                     // NEIN: Das Fahrzeug wurde nicht gefunden -> Exception werfen
                     throw new UnkownVehicleException("Fahrzeug mit Kennzeichen " + kennzeichen + " ist unbekannt.");
@@ -62,7 +64,31 @@ public class MautServiceImpl implements IMautService {
             throw new DataException(e);
         }
 
-        // TODO: Hier geht es weiter mit Schritt 2: Achszahl prüfen...
+        // ---------------------------------------------------------
+        // SCHRITT 2: Ist das Fahrzeug mit der korrekten Achszahl unterwegs?
+        // ---------------------------------------------------------
+        String sqlCheckAxles = "SELECT ACHSEN FROM FAHRZEUG WHERE FZ_ID = ?";
+
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sqlCheckAxles)) {
+            // KORREKTUR: setLong statt setInt!
+            pstmt.setLong(1, fahrzeugId); // Wir nutzen die ID aus Schritt 1
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    int dbAchsen = rs.getInt("ACHSEN"); // Achsen sind klein genug für int
+                    // Vergleich: Gemeldete Achsen vs. Datenbank-Achsen
+                    if (dbAchsen != achszahl) {
+                        // NEIN: Daten stimmen nicht überein -> Exception
+                        throw new InvalidVehicleDataException("Achszahl inkorrekt! Gemeldet: " + achszahl + ", Erwartet: " + dbAchsen);
+                    }
+                    // JA: Alles okay, es geht weiter...
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataException(e);
+        }
+
+        // TODO: Hier geht es weiter mit Schritt 3...
     }
 
 
