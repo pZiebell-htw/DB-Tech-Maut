@@ -4,7 +4,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 
 import de.htwberlin.dbtech.exceptions.DataException;
 
@@ -16,7 +15,6 @@ public class MauterhebungDao {
         this.connection = connection;
     }
 
-    // --- Methode aus Übung 2 ---
     public int findNutzerIdByMautId(int maut_id) {
         int nutzerId = 0;
         String sql = "SELECT f.NUTZER_ID " +
@@ -37,32 +35,25 @@ public class MauterhebungDao {
         return nutzerId;
     }
 
-    // --- NEUE Methode für Übung 3 ---
     public void insertMauterhebung(int abschnittsId, long fzgGeratId, int kategorieId, double kosten) {
-        // 1. Neue ID ermitteln
         long newMautId;
         String sqlMax = "SELECT NVL(MAX(MAUT_ID),0) + 1 AS NEUE_ID FROM MAUTERHEBUNG";
-
-        // 2. Insert Statement
         String sqlInsert = "INSERT INTO MAUTERHEBUNG (MAUT_ID, ABSCHNITTS_ID, FZG_ID, KATEGORIE_ID, BEFAHRUNGSDATUM, KOSTEN) "
-                + "VALUES (?,?,?,?,?,?)";
+                + "VALUES (?,?,?,?, SYSDATE, ?)";
 
         try {
-            // ID holen
             try (PreparedStatement pstmt = connection.prepareStatement(sqlMax);
                  ResultSet rs = pstmt.executeQuery()) {
                 rs.next();
                 newMautId = rs.getLong("NEUE_ID");
             }
 
-            // Einfügen
             try (PreparedStatement pstmt = connection.prepareStatement(sqlInsert)) {
                 pstmt.setLong(1, newMautId);
                 pstmt.setInt(2, abschnittsId);
                 pstmt.setLong(3, fzgGeratId);
                 pstmt.setInt(4, kategorieId);
-                pstmt.setTimestamp(5, new Timestamp(System.currentTimeMillis()));
-                pstmt.setDouble(6, kosten);
+                pstmt.setDouble(5, kosten);
                 pstmt.executeUpdate();
             }
         } catch (SQLException e) {

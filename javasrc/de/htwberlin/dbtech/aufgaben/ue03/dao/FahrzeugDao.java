@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 
 import de.htwberlin.dbtech.exceptions.DataException;
+import de.htwberlin.dbtech.utils.MautConstants;
 
 public class FahrzeugDao {
 
@@ -14,8 +15,6 @@ public class FahrzeugDao {
     public FahrzeugDao(Connection connection) {
         this.connection = connection;
     }
-
-    // --- Methoden aus Übung 2 (Bleiben unverändert) ---
 
     public void insert(long fz_id, int sskl_id, int nutzer_id, String kennzeichen, String fin, int achsen, int gewicht,
                        String zulassungsland) {
@@ -45,8 +44,6 @@ public class FahrzeugDao {
             throw new DataException(e);
         }
     }
-
-    // --- NEUE Methoden für Übung 3 (Berechnung) ---
 
     public Long findIdByKennzeichen(String kennzeichen) {
         String sql = "SELECT FZ_ID FROM FAHRZEUG WHERE KENNZEICHEN = ?";
@@ -78,17 +75,16 @@ public class FahrzeugDao {
         return null;
     }
 
-    /** Hilfsklasse für kombinierte Daten aus FAHRZEUG und FAHRZEUGGERAT */
     public static class FahrzeugDaten {
         public Integer achsen;
-        public Long fzgGeratId; // Kann null sein
+        public Long fzgGeratId;
     }
 
     public FahrzeugDaten findFahrzeugDaten(long fzgId) {
         String sql = "SELECT fzg.FZG_ID, f.ACHSEN "
                 + "FROM FAHRZEUG f LEFT JOIN FAHRZEUGGERAT fzg ON f.FZ_ID = fzg.FZ_ID "
                 + "WHERE f.FZ_ID = ? AND f.ABMELDEDATUM IS NULL "
-                + "AND (fzg.STATUS = 'active' OR fzg.STATUS IS NULL)";
+                + "AND (fzg.STATUS = '" + MautConstants.FZG_STATUS_ACTIVE + "' OR fzg.STATUS IS NULL)";
 
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setLong(1, fzgId);

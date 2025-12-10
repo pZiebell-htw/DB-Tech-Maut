@@ -18,7 +18,7 @@ public class MautabschnittDao {
         this.connection = connection;
     }
 
-    // --- Methode aus Übung 2 ---
+    // Methode aus Übung 2
     public List<Mautabschnitt> findByAbschnittstyp(String abschnittstyp) {
         List<Mautabschnitt> abschnitte = new ArrayList<>();
         String sql = "SELECT * FROM MAUTABSCHNITT WHERE ABSCHNITTSTYP = ?";
@@ -42,7 +42,6 @@ public class MautabschnittDao {
         return abschnitte;
     }
 
-    // --- NEUE Methode für Übung 3 ---
     public Double findLaenge(int abschnittsId) {
         String sql = "SELECT LAENGE FROM MAUTABSCHNITT WHERE ABSCHNITTS_ID = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {

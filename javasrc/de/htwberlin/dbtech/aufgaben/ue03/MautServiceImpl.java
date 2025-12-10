@@ -7,17 +7,16 @@ import de.htwberlin.dbtech.exceptions.DataException;
 import de.htwberlin.dbtech.exceptions.AlreadyCruisedException;
 import de.htwberlin.dbtech.exceptions.InvalidVehicleDataException;
 import de.htwberlin.dbtech.exceptions.UnkownVehicleException;
+import de.htwberlin.dbtech.utils.MautConstants;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 
 /**
- * Die Klasse realisiert den AusleiheService.
+ * Die Klasse realisiert den MautService.
  *
  * @author Patrick Dohmeier
  */
-
 public class MautServiceImpl implements IMautService {
     private static final Logger L = LoggerFactory.getLogger(MautServiceImpl.class);
     private Connection connection;
@@ -34,54 +33,46 @@ public class MautServiceImpl implements IMautService {
         return connection;
     }
 
+    private void pruefeAchszahl(int erwartet, int gemeldet) throws InvalidVehicleDataException {
+        if (erwartet <= 4) {
+            if (erwartet != gemeldet) {
+                throw new InvalidVehicleDataException(
+                        "Achszahl inkorrekt! Gemeldet: " + gemeldet + ", Erwartet: " + erwartet);
+            }
+        } else {
+            if (gemeldet < 5) {
+                throw new InvalidVehicleDataException(
+                        "Achszahl inkorrekt! Gemeldet: " + gemeldet + ", Erwartet: >=5");
+            }
+        }
+    }
+
     @Override
     public void berechneMaut(int mautAbschnitt, int achszahl, String kennzeichen)
             throws UnkownVehicleException, InvalidVehicleDataException, AlreadyCruisedException {
-            // Variable für die Fahrzeug-ID (brauchen wir später für weitere Schritte)
-            // KORREKTUR: Long statt Integer verwenden, da die IDs sehr groß sind
+
         Long fahrzeugId = null;
-        // ---------------------------------------------------------
-        // SCHRITT 1: Ist das Fahrzeug bekannt?
-        // ---------------------------------------------------------
+
         String sqlCheckVehicle = "SELECT FZ_ID FROM FAHRZEUG WHERE KENNZEICHEN = ?";
         try (PreparedStatement pstmt = getConnection().prepareStatement(sqlCheckVehicle)) {
-            // Das Kennzeichen aus den Methodenparametern setzen
             pstmt.setString(1, kennzeichen);
-
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                // JA: Das Fahrzeug ist in der Fahrzeugtabelle bekannt. Wir merken uns die ID.
-                // KORREKTUR: getLong statt getInt!
                     fahrzeugId = rs.getLong("FZ_ID");
                 }
-                // WICHTIG: Kein else-Zweig mit UnkownVehicleException mehr!
-                // Laut Spezifikation ist ein Fahrzeug auch dann relevant,
-                // wenn es zwar nicht registriert ist, aber eine offene
-                // Buchung im manuellen Verfahren besitzt. Die Entscheidung,
-                // ob das Fahrzeug wirklich "unbekannt" ist, wird daher
-                // erst nach der Pruefung auf automatische _und_ manuelle
-                // Verfahren getroffen.
             }
         } catch (SQLException e) {
             throw new DataException(e);
         }
-        // ---------------------------------------------------------
-        // SCHRITT 2 / 3: Verfahren & Achszahlpruefung je nach Verfahren
-        // ---------------------------------------------------------
-        // Wir pruefen zunaechst, ob das Fahrzeug ein aktives Fahrzeuggeraet
-        // besitzt und damit im automatischen Verfahren unterwegs ist.
-        String sqlCheckOBU = "SELECT fzg.FZG_ID, f.ACHSEN "
 
+        String sqlCheckOBU = "SELECT fzg.FZG_ID, f.ACHSEN "
                 + "FROM FAHRZEUG f LEFT JOIN FAHRZEUGGERAT fzg ON f.FZ_ID = fzg.FZ_ID "
                 + "WHERE f.FZ_ID = ? AND f.ABMELDEDATUM IS NULL "
-                + "AND (fzg.STATUS = 'active' OR fzg.STATUS IS NULL)";
+                + "AND (fzg.STATUS = '" + MautConstants.FZG_STATUS_ACTIVE + "' OR fzg.STATUS IS NULL)";
+
         Long fzgGeratId = null;
         Integer dbAchsen = null;
-        // Die Pruefung auf ein Fahrzeuggeraet und das Auslesen der echten
-        // Achszahl ist nur sinnvoll, wenn wir ueberhaupt ein Fahrzeug in der
-        // Fahrzeugtabelle gefunden haben. Fehlt der Fahrzeugeintrag komplett
-        // (z.B. im reinen manuellen Verfahren), wird dieser Block uebersprungen
-        // und spaeter nur das manuelle Verfahren betrachtet.
+
         if (fahrzeugId != null) {
             try (PreparedStatement pstmt = getConnection().prepareStatement(sqlCheckOBU)) {
                 pstmt.setLong(1, fahrzeugId);
@@ -98,37 +89,17 @@ public class MautServiceImpl implements IMautService {
                 throw new DataException(e);
             }
         }
+
         boolean istAutomatik = (fzgGeratId != null);
-        // ---------------------------------------------------------
-        // Verfahrensspezifische Logik
-        // ---------------------------------------------------------
+
         if (istAutomatik) {
-        // =========================================================
-        // SCHRITT 4a: Automatisches Verfahren
-        // =========================================================
             try {
-            // Zunaechst: Achszahlpruefung geme4df Spezifikation fuer
-            // das automatische Verfahren ("echte" Achszahl aus der
-            // Fahrzeugtabelle gegen die gemessene Achszahl pruefen).
                 if (dbAchsen == null) {
-                // sollte bei einem gueltigen Fahrzeug im Automatikverfahren
-                // nicht vorkommen, da dann ein Datensatz in FAHRZEUG
-                // existieren muss
                     throw new DataException("Fahrzeugdaten konnten nicht gelesen werden");
                 }
-                if (dbAchsen <= 4) {
-                    if (dbAchsen != achszahl) {
-                        throw new InvalidVehicleDataException(
-                                "Achszahl inkorrekt! Gemeldet: " + achszahl + ", Erwartet: " + dbAchsen);
-                    }
-                } else {
-                // Fahrzeuge mit 5 oder mehr Achsen werden nur gegen ">= 5" geprueft.
-                    if (achszahl < 5) {
-                        throw new InvalidVehicleDataException(
-                                "Achszahl inkorrekt! Gemeldet: " + achszahl + ", Erwartet: >=5");
-                    }
-                }
-                // 1) Schadstoffklasse fuer das Fahrzeug ermitteln
+
+                pruefeAchszahl(dbAchsen, achszahl);
+
                 String sqlSskl = "SELECT SSKL_ID FROM FAHRZEUG WHERE FZ_ID = ?";
                 int ssklId;
                 try (PreparedStatement pstmt = getConnection().prepareStatement(sqlSskl)) {
@@ -140,14 +111,14 @@ public class MautServiceImpl implements IMautService {
                         ssklId = rs.getInt("SSKL_ID");
                     }
                 }
-                // 2) Passende Mautkategorie in Abhaengigkeit von Achsen suchen
-                String sqlKat =
-                        "SELECT KATEGORIE_ID, MAUTSATZ_JE_KM FROM MAUTKATEGORIE "
-                                + "WHERE SSKL_ID = ? AND "
-                                + "( (ACHSZAHL = '= 2' AND ? = 2) "
-                                + "OR (ACHSZAHL = '= 3' AND ? = 3) "
-                                + "OR (ACHSZAHL = '= 4' AND ? = 4) "
-                                + "OR (ACHSZAHL = '>= 5' AND ? >= 5) )";
+
+                String sqlKat = "SELECT KATEGORIE_ID, MAUTSATZ_JE_KM FROM MAUTKATEGORIE "
+                        + "WHERE SSKL_ID = ? AND "
+                        + "( (ACHSZAHL = '" + MautConstants.ACHSZAHL_2 + "' AND ? = 2) "
+                        + "OR (ACHSZAHL = '" + MautConstants.ACHSZAHL_3 + "' AND ? = 3) "
+                        + "OR (ACHSZAHL = '" + MautConstants.ACHSZAHL_4 + "' AND ? = 4) "
+                        + "OR (ACHSZAHL = '" + MautConstants.ACHSZAHL_5_PLUS + "' AND ? >= 5) )";
+
                 int kategorieId;
                 double mautSatzJeKm;
                 try (PreparedStatement pstmt = getConnection().prepareStatement(sqlKat)) {
@@ -164,7 +135,7 @@ public class MautServiceImpl implements IMautService {
                         mautSatzJeKm = rs.getDouble("MAUTSATZ_JE_KM");
                     }
                 }
-                // 3) Abschnittslaenge ermitteln
+
                 String sqlLen = "SELECT LAENGE FROM MAUTABSCHNITT WHERE ABSCHNITTS_ID = ?";
                 double laengeMeter;
                 try (PreparedStatement pstmt = getConnection().prepareStatement(sqlLen)) {
@@ -176,12 +147,11 @@ public class MautServiceImpl implements IMautService {
                         laengeMeter = rs.getDouble("LAENGE");
                     }
                 }
-                // 4) Kosten berechnen (MAUTSATZ_JE_KM ist in Cent / km angegeben)
-                double laengeKm = laengeMeter / 1000.0;
-                double kostenEuro = (laengeKm * mautSatzJeKm) / 100.0;
-                // auf 2 Nachkommastellen runden
+
+                double laengeKm = laengeMeter / MautConstants.METER_TO_KM;
+                double kostenEuro = (laengeKm * mautSatzJeKm) / MautConstants.CENT_TO_EURO;
                 kostenEuro = Math.round(kostenEuro * 100.0) / 100.0;
-                // 5) Neue MAUT_ID bestimmen
+
                 long newMautId;
                 String sqlMaxMaut = "SELECT NVL(MAX(MAUT_ID),0) + 1 AS NEUE_ID FROM MAUTERHEBUNG";
                 try (PreparedStatement pstmt = getConnection().prepareStatement(sqlMaxMaut);
@@ -189,16 +159,15 @@ public class MautServiceImpl implements IMautService {
                     rs.next();
                     newMautId = rs.getLong("NEUE_ID");
                 }
-                // 6) Datensatz in MAUTERHEBUNG einfuegen
+
                 String sqlInsert = "INSERT INTO MAUTERHEBUNG (MAUT_ID, ABSCHNITTS_ID, FZG_ID, KATEGORIE_ID, BEFAHRUNGSDATUM, KOSTEN) "
-                        + "VALUES (?,?,?,?,?,?)";
+                        + "VALUES (?,?,?,?, SYSDATE, ?)";
                 try (PreparedStatement pstmt = getConnection().prepareStatement(sqlInsert)) {
                     pstmt.setLong(1, newMautId);
                     pstmt.setInt(2, mautAbschnitt);
                     pstmt.setLong(3, fzgGeratId);
                     pstmt.setInt(4, kategorieId);
-                    pstmt.setTimestamp(5, new Timestamp(System.currentTimeMillis()));
-                    pstmt.setDouble(6, kostenEuro);
+                    pstmt.setDouble(5, kostenEuro);
                     pstmt.executeUpdate();
                 }
             } catch (SQLException e) {
@@ -206,15 +175,9 @@ public class MautServiceImpl implements IMautService {
             }
 
         } else {
-        // =========================================================
-        // SCHRITT 4b: Manuelles Verfahren
-        // =========================================================
             try {
-            // 0) Pruefen, ob das Fahrzeug ueberhaupt im manuellen Verfahren
-            // unterwegs ist: dazu muss es mindestens eine offene Buchung
-            // (B_ID = 1) fuer das Kennzeichen geben, unabhaengig vom
-            // Mautabschnitt.
-                String sqlCheckManual = "SELECT 1 FROM BUCHUNG WHERE KENNZEICHEN = ? AND B_ID = 1";
+                String sqlCheckManual = "SELECT 1 FROM BUCHUNG WHERE KENNZEICHEN = ? AND B_ID = "
+                        + MautConstants.BUCHUNG_STATUS_OFFEN;
                 boolean hatOffeneBuchung = false;
                 try (PreparedStatement pstmt = getConnection().prepareStatement(sqlCheckManual)) {
                     pstmt.setString(1, kennzeichen);
@@ -224,20 +187,21 @@ public class MautServiceImpl implements IMautService {
                         }
                     }
                 }
+
                 if (!hatOffeneBuchung) {
-                // Weder automatisches Verfahren (kein aktives Fahrzeuggeraet)
-                // noch eine offene Buchung im manuellen Verfahren vorhanden:
-                // Das Fahrzeug ist aus Sicht des Systems unbekannt.
                     throw new UnkownVehicleException(
                             "Fahrzeug mit Kennzeichen " + kennzeichen + " ist unbekannt.");
                 }
-                // 1) Offene Buchung fuer das Kennzeichen und den Abschnitt suchen
+
                 String sqlOpenBooking = "SELECT b.BUCHUNG_ID, b.KATEGORIE_ID, mk.ACHSZAHL "
                         + "FROM BUCHUNG b JOIN MAUTKATEGORIE mk ON b.KATEGORIE_ID = mk.KATEGORIE_ID "
-                        + "WHERE b.ABSCHNITTS_ID = ? AND b.KENNZEICHEN = ? AND b.B_ID = 1";
+                        + "WHERE b.ABSCHNITTS_ID = ? AND b.KENNZEICHEN = ? AND b.B_ID = "
+                        + MautConstants.BUCHUNG_STATUS_OFFEN;
+
                 Long buchungId = null;
                 int buchungsKategorieId = 0;
                 String buchungsAchszahlKat = null;
+
                 try (PreparedStatement pstmt = getConnection().prepareStatement(sqlOpenBooking)) {
                     pstmt.setInt(1, mautAbschnitt);
                     pstmt.setString(2, kennzeichen);
@@ -249,31 +213,34 @@ public class MautServiceImpl implements IMautService {
                         }
                     }
                 }
-                // Falls keine offene Buchung existiert, liegt eine Doppelbefahrung vor
+
                 if (buchungId == null) {
-                    throw new AlreadyCruisedException("Keine offene Buchung fuer Abschnitt " + mautAbschnitt + " gefunden");
+                    throw new AlreadyCruisedException(
+                            "Keine offene Buchung fuer Abschnitt " + mautAbschnitt + " gefunden");
                 }
-                // 2) Achszahl anhand der in der Kategorie hinterlegten Regel pruefen
+
                 boolean achsenOk;
-                if ("= 2".equals(buchungsAchszahlKat)) {
+                if (MautConstants.ACHSZAHL_2.equals(buchungsAchszahlKat)) {
                     achsenOk = (achszahl == 2);
-                } else if ("= 3".equals(buchungsAchszahlKat)) {
+                } else if (MautConstants.ACHSZAHL_3.equals(buchungsAchszahlKat)) {
                     achsenOk = (achszahl == 3);
-                } else if ("= 4".equals(buchungsAchszahlKat)) {
+                } else if (MautConstants.ACHSZAHL_4.equals(buchungsAchszahlKat)) {
                     achsenOk = (achszahl == 4);
-                } else if (">= 5".equals(buchungsAchszahlKat)) {
+                } else if (MautConstants.ACHSZAHL_5_PLUS.equals(buchungsAchszahlKat)) {
                     achsenOk = (achszahl >= 5);
                 } else {
                     achsenOk = false;
                 }
+
                 if (!achsenOk) {
-                    throw new InvalidVehicleDataException("Achszahl stimmt nicht mit gebuchter Kategorie ueberein");
+                    throw new InvalidVehicleDataException(
+                            "Achszahl stimmt nicht mit gebuchter Kategorie ueberein");
                 }
-                // 3) Buchungsstatus auf "abgeschlossen" setzen und Befahrungszeitpunkt setzen
-                String sqlUpdate = "UPDATE BUCHUNG SET B_ID = 3, BEFAHRUNGSDATUM = ? WHERE BUCHUNG_ID = ?";
+
+                String sqlUpdate = "UPDATE BUCHUNG SET B_ID = " + MautConstants.BUCHUNG_STATUS_ABGESCHLOSSEN
+                        + ", BEFAHRUNGSDATUM = SYSDATE WHERE BUCHUNG_ID = ?";
                 try (PreparedStatement pstmt = getConnection().prepareStatement(sqlUpdate)) {
-                    pstmt.setTimestamp(1, new Timestamp(System.currentTimeMillis()));
-                    pstmt.setLong(2, buchungId);
+                    pstmt.setLong(1, buchungId);
                     pstmt.executeUpdate();
                 }
 

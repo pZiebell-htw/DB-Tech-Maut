@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 
 import de.htwberlin.dbtech.exceptions.DataException;
+import de.htwberlin.dbtech.utils.MautConstants;
 
 public class MautkategorieDao {
 
@@ -23,10 +24,10 @@ public class MautkategorieDao {
     public KategorieDaten findeKategorie(int ssklId, int achszahl) {
         String sql = "SELECT KATEGORIE_ID, MAUTSATZ_JE_KM FROM MAUTKATEGORIE "
                 + "WHERE SSKL_ID = ? AND "
-                + "( (ACHSZAHL = '= 2' AND ? = 2) "
-                + "OR (ACHSZAHL = '= 3' AND ? = 3) "
-                + "OR (ACHSZAHL = '= 4' AND ? = 4) "
-                + "OR (ACHSZAHL = '>= 5' AND ? >= 5) )";
+                + "( (ACHSZAHL = '" + MautConstants.ACHSZAHL_2 + "' AND ? = 2) "
+                + "OR (ACHSZAHL = '" + MautConstants.ACHSZAHL_3 + "' AND ? = 3) "
+                + "OR (ACHSZAHL = '" + MautConstants.ACHSZAHL_4 + "' AND ? = 4) "
+                + "OR (ACHSZAHL = '" + MautConstants.ACHSZAHL_5_PLUS + "' AND ? >= 5) )";
 
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, ssklId);
@@ -45,6 +46,6 @@ public class MautkategorieDao {
         } catch (SQLException e) {
             throw new DataException(e);
         }
-        return null; // Nichts gefunden
+        return null;
     }
 }

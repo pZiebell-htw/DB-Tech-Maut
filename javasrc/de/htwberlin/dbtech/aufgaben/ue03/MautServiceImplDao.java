@@ -5,7 +5,6 @@ import java.util.List;
 
 import de.htwberlin.dbtech.aufgaben.ue02.IMautVerwaltung;
 import de.htwberlin.dbtech.aufgaben.ue02.Mautabschnitt;
-import de.htwberlin.dbtech.aufgaben.ue03.IMautService;
 import de.htwberlin.dbtech.aufgaben.ue03.dao.BuchungDao;
 import de.htwberlin.dbtech.aufgaben.ue03.dao.FahrzeugDao;
 import de.htwberlin.dbtech.aufgaben.ue03.dao.FahrzeugDao.FahrzeugDaten;
@@ -15,6 +14,7 @@ import de.htwberlin.dbtech.aufgaben.ue03.dao.MauterhebungDao;
 import de.htwberlin.dbtech.aufgaben.ue03.dao.MautkategorieDao;
 import de.htwberlin.dbtech.aufgaben.ue03.dao.MautkategorieDao.KategorieDaten;
 import de.htwberlin.dbtech.aufgaben.ue03.dao.BuchungDao.BuchungsDaten;
+import de.htwberlin.dbtech.utils.MautConstants;
 import de.htwberlin.dbtech.exceptions.AlreadyCruisedException;
 import de.htwberlin.dbtech.exceptions.DataException;
 import de.htwberlin.dbtech.exceptions.InvalidVehicleDataException;
@@ -23,21 +23,16 @@ import de.htwberlin.dbtech.exceptions.UnkownVehicleException;
 public class MautServiceImplDao implements IMautVerwaltung, IMautService {
 
     private Connection connection;
-
-    // Bestehende DAOs
     private FahrzeugDao fahrzeugDao;
     private FahrzeuggeratDao fahrzeuggeratDao;
     private MauterhebungDao mauterhebungDao;
     private MautabschnittDao mautabschnittDao;
-
-    // Neue DAOs für Übung 3
     private BuchungDao buchungDao;
     private MautkategorieDao mautkategorieDao;
 
     @Override
     public void setConnection(Connection connection) {
         this.connection = connection;
-        // Alle DAOs initialisieren
         this.fahrzeugDao = new FahrzeugDao(connection);
         this.fahrzeuggeratDao = new FahrzeuggeratDao(connection);
         this.mauterhebungDao = new MauterhebungDao(connection);
@@ -52,7 +47,19 @@ public class MautServiceImplDao implements IMautVerwaltung, IMautService {
         }
     }
 
-    // --- Methoden aus Übung 2 (IMautVerwaltung) ---
+    private void pruefeAchszahl(int erwartet, int gemeldet) throws InvalidVehicleDataException {
+        if (erwartet <= 4) {
+            if (erwartet != gemeldet) {
+                throw new InvalidVehicleDataException(
+                        "Achszahl inkorrekt! Gemeldet: " + gemeldet + ", Erwartet: " + erwartet);
+            }
+        } else {
+            if (gemeldet < 5) {
+                throw new InvalidVehicleDataException(
+                        "Achszahl inkorrekt! Gemeldet: " + gemeldet + ", Erwartet: >=5");
+            }
+        }
+    }
 
     @Override
     public String getStatusForOnBoardUnit(long fzg_id) {
@@ -91,18 +98,14 @@ public class MautServiceImplDao implements IMautVerwaltung, IMautService {
         return mautabschnittDao.findByAbschnittstyp(abschnittstyp);
     }
 
-    // --- Methode für Übung 3 (IMautService) ---
-
     @Override
     public void berechneMaut(int mautAbschnitt, int achszahl, String kennzeichen)
             throws UnkownVehicleException, InvalidVehicleDataException, AlreadyCruisedException {
 
         checkConnection();
 
-        // SCHRITT 1: Ist das Fahrzeug bekannt?
         Long fahrzeugId = fahrzeugDao.findIdByKennzeichen(kennzeichen);
 
-        // SCHRITT 2: Fahrzeugdaten (Achsen) und OBU-Status laden
         Integer dbAchsen = null;
         Long fzgGeratId = null;
 
@@ -116,81 +119,57 @@ public class MautServiceImplDao implements IMautVerwaltung, IMautService {
 
         boolean istAutomatik = (fzgGeratId != null);
 
-        // SCHRITT 3: Verfahrensspezifische Logik
         if (istAutomatik) {
-            // --- Automatisches Verfahren ---
-
             if (dbAchsen == null) {
                 throw new DataException("Fahrzeugdaten konnten nicht gelesen werden");
             }
 
-            // Achszahl prüfen
-            if (dbAchsen <= 4) {
-                if (dbAchsen != achszahl) {
-                    throw new InvalidVehicleDataException(
-                            "Achszahl inkorrekt! Gemeldet: " + achszahl + ", Erwartet: " + dbAchsen);
-                }
-            } else {
-                if (achszahl < 5) {
-                    throw new InvalidVehicleDataException(
-                            "Achszahl inkorrekt! Gemeldet: " + achszahl + ", Erwartet: >=5");
-                }
-            }
+            pruefeAchszahl(dbAchsen, achszahl);
 
-            // Schadstoffklasse holen
             Integer ssklId = fahrzeugDao.findSsklId(fahrzeugId);
             if (ssklId == null) {
                 throw new DataException("Fahrzeugdaten (SSKL) nicht gefunden");
             }
 
-            // Mautkategorie holen
             KategorieDaten katDaten = mautkategorieDao.findeKategorie(ssklId, achszahl);
             if (katDaten == null) {
                 throw new DataException("Keine passende Mautkategorie gefunden");
             }
 
-            // Abschnittslänge holen
             Double laengeMeter = mautabschnittDao.findLaenge(mautAbschnitt);
             if (laengeMeter == null) {
                 throw new DataException("Mautabschnitt nicht gefunden: " + mautAbschnitt);
             }
 
-            // Kosten berechnen
-            double laengeKm = laengeMeter / 1000.0;
-            double kostenEuro = (laengeKm * katDaten.mautSatzJeKm) / 100.0;
+            double laengeKm = laengeMeter / MautConstants.METER_TO_KM;
+            double kostenEuro = (laengeKm * katDaten.mautSatzJeKm) / MautConstants.CENT_TO_EURO;
             kostenEuro = Math.round(kostenEuro * 100.0) / 100.0;
 
-            // Speichern
             mauterhebungDao.insertMauterhebung(mautAbschnitt, fzgGeratId, katDaten.kategorieId, kostenEuro);
 
         } else {
-            // --- Manuelles Verfahren ---
-
-            // Prüfen, ob überhaupt eine offene Buchung vorliegt (sonst UnkownVehicleException)
             boolean hatOffeneBuchung = buchungDao.hatOffeneBuchung(kennzeichen);
 
             if (!hatOffeneBuchung) {
                 throw new UnkownVehicleException("Fahrzeug mit Kennzeichen " + kennzeichen + " ist unbekannt.");
             }
 
-            // Konkrete Buchung für den Abschnitt suchen
             BuchungsDaten buchungsDaten = buchungDao.findeOffeneBuchung(mautAbschnitt, kennzeichen);
 
             if (buchungsDaten == null) {
                 throw new AlreadyCruisedException("Keine offene Buchung fuer Abschnitt " + mautAbschnitt + " gefunden");
             }
 
-            // Achszahl prüfen
             boolean achsenOk;
             String katAchsen = buchungsDaten.achszahlKat;
 
-            if ("= 2".equals(katAchsen)) {
+            if (MautConstants.ACHSZAHL_2.equals(katAchsen)) {
                 achsenOk = (achszahl == 2);
-            } else if ("= 3".equals(katAchsen)) {
+            } else if (MautConstants.ACHSZAHL_3.equals(katAchsen)) {
                 achsenOk = (achszahl == 3);
-            } else if ("= 4".equals(katAchsen)) {
+            } else if (MautConstants.ACHSZAHL_4.equals(katAchsen)) {
                 achsenOk = (achszahl == 4);
-            } else if (">= 5".equals(katAchsen)) {
+            } else if (MautConstants.ACHSZAHL_5_PLUS.equals(katAchsen)) {
                 achsenOk = (achszahl >= 5);
             } else {
                 achsenOk = false;
@@ -200,7 +179,6 @@ public class MautServiceImplDao implements IMautVerwaltung, IMautService {
                 throw new InvalidVehicleDataException("Achszahl stimmt nicht mit gebuchter Kategorie ueberein");
             }
 
-            // Buchung schließen
             buchungDao.schliesseBuchung(buchungsDaten.buchungId);
         }
     }
