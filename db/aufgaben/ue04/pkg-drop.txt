@@ -1,2 +1,3 @@
-drop package body versicherungsservice;
-drop package versicherungsservice;
+DROP PACKAGE BODY maut_service;
+DROP PACKAGE maut_service;
+/

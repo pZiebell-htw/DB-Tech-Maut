@@ -1,14 +1,63 @@
-create or replace package maut_service as
+CREATE OR REPLACE PACKAGE maut_service AS
 
-  unkown_vehicle exception;
-  pragma exception_init(unkown_vehicle, -20001);
-  invalid_vehicle_data exception;
-  pragma exception_init(invalid_vehicle_data, -20002);
-  already_cruised exception;
-  pragma exception_init(already_cruised, -20003);
+  -- Konstanten
+  C_BUCHUNG_STATUS_OFFEN CONSTANT NUMBER := 1;
+  C_BUCHUNG_STATUS_ABGESCHLOSSEN CONSTANT NUMBER := 3;
 
-  procedure berechnemaut(
-    p_mautabschnitt mautabschnitt.abschnitts_id%type,
-    p_achszahl fahrzeug.achsen%type,
-    p_kennzeichen fahrzeug.kennzeichen%type);
-end maut_service;
+  C_FZG_STATUS_ACTIVE CONSTANT VARCHAR2(10) := 'active';
+
+  C_ACHSZAHL_2 CONSTANT VARCHAR2(10) := '= 2';
+  C_ACHSZAHL_3 CONSTANT VARCHAR2(10) := '= 3';
+  C_ACHSZAHL_4 CONSTANT VARCHAR2(10) := '= 4';
+  C_ACHSZAHL_5_PLUS CONSTANT VARCHAR2(10) := '>= 5';
+
+  -- Achszahl-Werte (für Vergleiche)
+  C_ACHSZAHL_WERT_2 CONSTANT NUMBER := 2;
+  C_ACHSZAHL_WERT_3 CONSTANT NUMBER := 3;
+  C_ACHSZAHL_WERT_4 CONSTANT NUMBER := 4;
+  C_ACHSZAHL_WERT_5 CONSTANT NUMBER := 5;
+
+  C_METER_TO_KM CONSTANT NUMBER := 1000.0;
+  C_CENT_TO_EURO CONSTANT NUMBER := 100.0;
+
+  -- Exceptions
+  UNKOWN_VEHICLE EXCEPTION;
+  PRAGMA EXCEPTION_INIT(UNKOWN_VEHICLE, -20001);
+
+  INVALID_VEHICLE_DATA EXCEPTION;
+  PRAGMA EXCEPTION_INIT(INVALID_VEHICLE_DATA, -20002);
+
+  ALREADY_CRUISED EXCEPTION;
+  PRAGMA EXCEPTION_INIT(ALREADY_CRUISED, -20003);
+
+  /**
+   * Die Methode realisiert einen Algorithmus, der die übermittelten
+   * Fahrzeugdaten mit der Datenbank auf Richtigkeit überprüft und für einen
+   * mautpflichtigen Streckenabschnitt die zu zahlende Maut für ein Fahrzeug
+   * im Automatischen Verfahren berechnet.
+   *
+   * Zuvor wird überprüft, ob das Fahrzeug registriert ist und über ein
+   * eingebautes Fahrzeuggerät verfügt und die übermittelten Daten des
+   * Kontrollsystems korrekt sind. Bei Fahrzeugen im Manuellen Verfahren wird
+   * darüber hinaus geprüft, ob es noch offene Buchungen für den Mautabschnitt
+   * gibt oder eine Doppelbefahrung aufgetreten ist. Besteht noch eine offene
+   * Buchung für den Mautabschnitt, so wird diese Buchung für das Fahrzeug auf
+   * abgeschlossen gesetzt.
+   *
+   * Sind die Daten des Fahrzeugs im Automatischen Verfahren korrekt, wird
+   * anhand der Mautkategorie (die sich aus der Achszahl und der
+   * Schadstoffklasse des Fahrzeugs zusammensetzt) und der Mautabschnittslänge
+   * die zu zahlende Maut berechnet, in der Mauterhebung gespeichert und
+   * letztendlich zurückgegeben.
+   *
+   * Parameter p_mautabschnitt identifiziert den mautpflichtigen Abschnitt
+   * Parameter p_achszahl identifiziert die Anzahl der Achsen des Fahrzeugs
+   * Parameter p_kennzeichen identifiziert das amtliche Kennzeichen des Fahrzeugs
+   */
+  PROCEDURE BERECHNEMAUT(
+    P_MAUTABSCHNITT MAUTABSCHNITT.ABSCHNITTS_ID%TYPE,
+    P_ACHSZAHL FAHRZEUG.ACHSEN%TYPE,
+    P_KENNZEICHEN FAHRZEUG.KENNZEICHEN%TYPE);
+
+END maut_service;
+/

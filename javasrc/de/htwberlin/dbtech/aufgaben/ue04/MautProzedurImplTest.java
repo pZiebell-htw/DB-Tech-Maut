@@ -8,12 +8,14 @@ import de.htwberlin.dbtech.utils.DbCred;
 import de.htwberlin.dbtech.utils.DbUnitUtils;
 import org.dbunit.IDatabaseTester;
 import org.dbunit.JdbcDatabaseTester;
+import org.dbunit.database.DatabaseConfig;
 import org.dbunit.database.IDatabaseConnection;
 import org.dbunit.database.QueryDataSet;
 import org.dbunit.dataset.IDataSet;
 import org.dbunit.dataset.ITable;
 import org.dbunit.dataset.RowOutOfBoundsException;
 import org.dbunit.dataset.csv.CsvDataSet;
+import org.dbunit.ext.oracle.OracleDataTypeFactory;
 import org.dbunit.operation.DatabaseOperation;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -45,6 +47,7 @@ public class MautProzedurImplTest {
             IDatabaseTester dbTester = new JdbcDatabaseTester(DbCred.driverClass, DbCred.url, DbCred.user, DbCred.password,
                     DbCred.schema);
             dbTesterCon = dbTester.getConnection();
+            dbTesterCon.getConfig().setProperty(DatabaseConfig.PROPERTY_DATATYPE_FACTORY, new OracleDataTypeFactory());
             IDataSet pre = new CsvDataSet(new File("test-data/ue03-04"));
             dbTester.setDataSet(pre);
             DatabaseOperation.CLEAN_INSERT.execute(dbTesterCon, pre);

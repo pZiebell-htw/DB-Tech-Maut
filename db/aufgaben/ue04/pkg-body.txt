@@ -1,23 +1,210 @@
-create or replace package body maut_service as
+CREATE OR REPLACE PACKAGE BODY maut_service AS
 
-  procedure test(
-    p_mautabschnitt mautabschnitt.abschnitts_id%type
-  ) as
-  begin
-    dbms_output.put_line('test');
-    dbms_output.put_line(p_mautabschnitt);
-  end test;
+  -- Hilfsfunktion: Fahrzeug-ID aus Kennzeichen ermitteln
+  FUNCTION get_fahrzeug_id(p_kennzeichen VARCHAR2)
+    RETURN NUMBER
+  IS
+    v_fz_id NUMBER;
+  BEGIN
+    SELECT fz_id INTO v_fz_id
+    FROM fahrzeug
+    WHERE kennzeichen = p_kennzeichen;
 
-  -----------------------------------------------------------------------------
-  -- berechnemaut
-  -----------------------------------------------------------------------------
-  procedure berechnemaut(
-    p_mautabschnitt mautabschnitt.abschnitts_id%type,
-    p_achszahl fahrzeug.achsen%type,
-    p_kennzeichen fahrzeug.kennzeichen%type
-  ) as
-  begin
-    test(p_mautabschnitt);
-  end berechnemaut;
-  
-end maut_service;
+    RETURN v_fz_id;
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RETURN NULL;
+  END get_fahrzeug_id;
+
+  -- Prüft ob Fahrzeug ein aktives OBU-Gerät hat
+  FUNCTION hat_aktives_geraet(p_fz_id NUMBER)
+    RETURN BOOLEAN
+  IS
+    v_fzg_id NUMBER;
+  BEGIN
+    SELECT fzg.fzg_id INTO v_fzg_id
+    FROM fahrzeug f
+    LEFT JOIN fahrzeuggerat fzg ON f.fz_id = fzg.fz_id
+    WHERE f.fz_id = p_fz_id
+      AND f.abmeldedatum IS NULL
+      AND fzg.status = C_FZG_STATUS_ACTIVE;
+
+    RETURN v_fzg_id IS NOT NULL;
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RETURN FALSE;
+  END hat_aktives_geraet;
+
+  -- Achszahl validieren (ähnlich wie in Java-Version)
+  PROCEDURE pruefe_achszahl(p_erwartet NUMBER, p_gemeldet NUMBER)
+  IS
+  BEGIN
+    IF p_erwartet <= C_ACHSZAHL_WERT_4 THEN
+      IF p_erwartet != p_gemeldet THEN
+        RAISE_APPLICATION_ERROR(-20002,
+          'Achszahl inkorrekt! Gemeldet: ' || p_gemeldet || ', Erwartet: ' || p_erwartet);
+      END IF;
+    ELSE
+      -- Spezialfall: >= 5 Achsen
+      IF p_gemeldet < C_ACHSZAHL_WERT_5 THEN
+        RAISE_APPLICATION_ERROR(-20002,
+          'Achszahl inkorrekt! Gemeldet: ' || p_gemeldet || ', Erwartet: >=5');
+      END IF;
+    END IF;
+  END pruefe_achszahl;
+
+  FUNCTION hat_offene_buchung(p_kennzeichen VARCHAR2)
+    RETURN BOOLEAN
+  IS
+    v_count NUMBER;
+  BEGIN
+    SELECT COUNT(*) INTO v_count
+    FROM buchung
+    WHERE kennzeichen = p_kennzeichen
+      AND b_id = C_BUCHUNG_STATUS_OFFEN;
+
+    RETURN v_count > 0;
+  END hat_offene_buchung;
+
+  -- Automatisches Verfahren: Maut berechnen und speichern
+  PROCEDURE verarbeite_automatik(
+    p_fz_id NUMBER,
+    p_mautabschnitt NUMBER,
+    p_achszahl NUMBER
+  ) IS
+    v_fzg_id NUMBER;
+    v_achsen NUMBER;
+    v_sskl_id NUMBER;
+    v_kategorie_id NUMBER;
+    v_mautsatz NUMBER;
+    v_laenge NUMBER;
+    v_kosten NUMBER;
+    v_neue_maut_id NUMBER;
+  BEGIN
+    -- Fahrzeugdaten und OBU-ID holen
+    SELECT fzg.fzg_id, f.achsen, f.sskl_id
+    INTO v_fzg_id, v_achsen, v_sskl_id
+    FROM fahrzeug f
+    LEFT JOIN fahrzeuggerat fzg ON f.fz_id = fzg.fz_id
+    WHERE f.fz_id = p_fz_id
+      AND f.abmeldedatum IS NULL
+      AND fzg.status = C_FZG_STATUS_ACTIVE;
+
+    -- Achszahl checken
+    pruefe_achszahl(v_achsen, p_achszahl);
+
+    -- Mautkategorie anhand Achszahl und Schadstoffklasse bestimmen
+    SELECT kategorie_id, mautsatz_je_km INTO v_kategorie_id, v_mautsatz
+    FROM mautkategorie
+    WHERE sskl_id = v_sskl_id
+      AND (
+        (achszahl = C_ACHSZAHL_2 AND p_achszahl = C_ACHSZAHL_WERT_2) OR
+        (achszahl = C_ACHSZAHL_3 AND p_achszahl = C_ACHSZAHL_WERT_3) OR
+        (achszahl = C_ACHSZAHL_4 AND p_achszahl = C_ACHSZAHL_WERT_4) OR
+        (achszahl = C_ACHSZAHL_5_PLUS AND p_achszahl >= C_ACHSZAHL_WERT_5)
+      );
+
+    -- Streckenlänge ermitteln
+    SELECT laenge INTO v_laenge
+    FROM mautabschnitt
+    WHERE abschnitts_id = p_mautabschnitt;
+
+    -- Kosten berechnen: (Meter -> km) * (Cent -> Euro)
+    v_kosten := ROUND((v_laenge / C_METER_TO_KM) * (v_mautsatz / C_CENT_TO_EURO), 2);
+
+    -- Neue ID für Mauterhebung
+    SELECT NVL(MAX(maut_id), 0) + 1 INTO v_neue_maut_id
+    FROM mauterhebung;
+
+    -- Mauterhebung in DB speichern
+    INSERT INTO mauterhebung (
+      maut_id, abschnitts_id, fzg_id, kategorie_id, befahrungsdatum, kosten
+    ) VALUES (
+      v_neue_maut_id, p_mautabschnitt, v_fzg_id, v_kategorie_id, SYSDATE, v_kosten
+    );
+
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RAISE_APPLICATION_ERROR(-20002, 'Fahrzeugdaten oder Mautkategorie nicht gefunden');
+  END verarbeite_automatik;
+
+  -- Manuelles Verfahren: Buchung abschließen
+  PROCEDURE verarbeite_manuell(
+    p_kennzeichen VARCHAR2,
+    p_mautabschnitt NUMBER,
+    p_achszahl NUMBER
+  ) IS
+    v_buchung_id NUMBER;
+    v_achszahl_kat VARCHAR2(10);
+    v_achsen_ok BOOLEAN := FALSE;
+  BEGIN
+    -- Offene Buchung für diesen Abschnitt suchen
+    SELECT b.buchung_id, mk.achszahl
+    INTO v_buchung_id, v_achszahl_kat
+    FROM buchung b
+    JOIN mautkategorie mk ON b.kategorie_id = mk.kategorie_id
+    WHERE b.abschnitts_id = p_mautabschnitt
+      AND b.kennzeichen = p_kennzeichen
+      AND b.b_id = C_BUCHUNG_STATUS_OFFEN;
+
+    -- Achszahl mit gebuchter Kategorie abgleichen
+    IF v_achszahl_kat = C_ACHSZAHL_2 THEN
+      v_achsen_ok := (p_achszahl = C_ACHSZAHL_WERT_2);
+    ELSIF v_achszahl_kat = C_ACHSZAHL_3 THEN
+      v_achsen_ok := (p_achszahl = C_ACHSZAHL_WERT_3);
+    ELSIF v_achszahl_kat = C_ACHSZAHL_4 THEN
+      v_achsen_ok := (p_achszahl = C_ACHSZAHL_WERT_4);
+    ELSIF v_achszahl_kat = C_ACHSZAHL_5_PLUS THEN
+      v_achsen_ok := (p_achszahl >= C_ACHSZAHL_WERT_5);
+    END IF;
+
+    IF NOT v_achsen_ok THEN
+      RAISE_APPLICATION_ERROR(-20002,
+        'Achszahl stimmt nicht mit gebuchter Kategorie ueberein');
+    END IF;
+
+    -- Buchung auf abgeschlossen setzen
+    UPDATE buchung
+    SET b_id = C_BUCHUNG_STATUS_ABGESCHLOSSEN, befahrungsdatum = SYSDATE
+    WHERE buchung_id = v_buchung_id;
+
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RAISE_APPLICATION_ERROR(-20003,
+        'Keine offene Buchung fuer Abschnitt ' || p_mautabschnitt || ' gefunden');
+  END verarbeite_manuell;
+
+  -- Hauptprozedur (aus Aufgabenstellung)
+  PROCEDURE berechnemaut(
+    p_mautabschnitt mautabschnitt.abschnitts_id%TYPE,
+    p_achszahl fahrzeug.achsen%TYPE,
+    p_kennzeichen fahrzeug.kennzeichen%TYPE
+  ) AS
+    v_fz_id NUMBER;
+    v_ist_automatik BOOLEAN;
+  BEGIN
+    -- Schritt 1: Fahrzeug suchen
+    v_fz_id := get_fahrzeug_id(p_kennzeichen);
+
+    -- Schritt 2: Verfahren bestimmen (Automatik oder Manuell)
+    IF v_fz_id IS NOT NULL THEN
+      v_ist_automatik := hat_aktives_geraet(v_fz_id);
+    ELSE
+      v_ist_automatik := FALSE;
+    END IF;
+
+    -- Schritt 3: Entsprechende Logik ausführen
+    IF v_ist_automatik THEN
+      verarbeite_automatik(v_fz_id, p_mautabschnitt, p_achszahl);
+    ELSIF hat_offene_buchung(p_kennzeichen) THEN
+      verarbeite_manuell(p_kennzeichen, p_mautabschnitt, p_achszahl);
+    ELSE
+      -- Fahrzeug weder im Auto- noch im Manuellen Verfahren
+      RAISE_APPLICATION_ERROR(-20001,
+        'Fahrzeug mit Kennzeichen ' || p_kennzeichen || ' ist unbekannt.');
+    END IF;
+
+  END berechnemaut;
+
+END maut_service;
+/
