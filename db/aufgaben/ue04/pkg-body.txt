@@ -53,18 +53,33 @@ CREATE OR REPLACE PACKAGE BODY maut_service AS
     END IF;
   END pruefe_achszahl;
 
-  FUNCTION hat_offene_buchung(p_kennzeichen VARCHAR2)
-    RETURN BOOLEAN
-  IS
-    v_count NUMBER;
-  BEGIN
-    SELECT COUNT(*) INTO v_count
-    FROM buchung
-    WHERE kennzeichen = p_kennzeichen
-      AND b_id = C_BUCHUNG_STATUS_OFFEN;
+  FUNCTION hat_offene_buchung(p_kennzeichen VARCHAR2, p_mautabschnitt NUMBER)
+      RETURN BOOLEAN
+    IS
+      v_count NUMBER;
+    BEGIN
+      SELECT COUNT(*) INTO v_count
+      FROM buchung
+      WHERE kennzeichen = p_kennzeichen
+        AND abschnitts_id = p_mautabschnitt
+        AND b_id = C_BUCHUNG_STATUS_OFFEN;
 
-    RETURN v_count > 0;
-  END hat_offene_buchung;
+      RETURN v_count > 0;
+    END hat_offene_buchung;
+
+  FUNCTION hat_abgeschlossene_buchung(p_kennzeichen VARCHAR2, p_mautabschnitt NUMBER)
+      RETURN BOOLEAN
+    IS
+      v_count NUMBER;
+    BEGIN
+      SELECT COUNT(*) INTO v_count
+      FROM buchung
+      WHERE kennzeichen = p_kennzeichen
+        AND abschnitts_id = p_mautabschnitt
+        AND b_id = C_BUCHUNG_STATUS_ABGESCHLOSSEN;
+
+      RETURN v_count > 0;
+    END hat_abgeschlossene_buchung;
 
   -- Automatisches Verfahren: Maut berechnen und speichern
   PROCEDURE verarbeite_automatik(
@@ -183,28 +198,35 @@ CREATE OR REPLACE PACKAGE BODY maut_service AS
     v_fz_id NUMBER;
     v_ist_automatik BOOLEAN;
   BEGIN
-    -- Schritt 1: Fahrzeug suchen
-    v_fz_id := get_fahrzeug_id(p_kennzeichen);
+      -- Schritt 1: Fahrzeug suchen
+      v_fz_id := get_fahrzeug_id(p_kennzeichen);
 
-    -- Schritt 2: Verfahren bestimmen (Automatik oder Manuell)
-    IF v_fz_id IS NOT NULL THEN
-      v_ist_automatik := hat_aktives_geraet(v_fz_id);
-    ELSE
-      v_ist_automatik := FALSE;
-    END IF;
+      -- Schritt 2: Verfahren bestimmen (Automatik oder Manuell)
+      IF v_fz_id IS NOT NULL THEN
+        v_ist_automatik := hat_aktives_geraet(v_fz_id);
+      ELSE
+        v_ist_automatik := FALSE;
+      END IF;
 
-    -- Schritt 3: Entsprechende Logik ausführen
-    IF v_ist_automatik THEN
-      verarbeite_automatik(v_fz_id, p_mautabschnitt, p_achszahl);
-    ELSIF hat_offene_buchung(p_kennzeichen) THEN
-      verarbeite_manuell(p_kennzeichen, p_mautabschnitt, p_achszahl);
-    ELSE
-      -- Fahrzeug weder im Auto- noch im Manuellen Verfahren
-      RAISE_APPLICATION_ERROR(-20001,
-        'Fahrzeug mit Kennzeichen ' || p_kennzeichen || ' ist unbekannt.');
-    END IF;
+      -- Schritt 3: Entsprechende Logik ausführen
+      IF v_ist_automatik THEN
+        verarbeite_automatik(v_fz_id, p_mautabschnitt, p_achszahl);
 
-  END berechnemaut;
+      -- Prüfen auf OFFENE Buchung für diesen Abschnitt
+      ELSIF hat_offene_buchung(p_kennzeichen, p_mautabschnitt) THEN
+        verarbeite_manuell(p_kennzeichen, p_mautabschnitt, p_achszahl);
+
+      -- Prüfen auf BEREITS ABGESCHLOSSENE Buchung (Doppelbefahrung)
+      ELSIF hat_abgeschlossene_buchung(p_kennzeichen, p_mautabschnitt) THEN
+         RAISE_APPLICATION_ERROR(-20003, 'Fahrzeug hat diesen Abschnitt bereits befahren.');
+
+      ELSE
+        -- Fahrzeug weder im Auto- noch im Manuellen Verfahren und keine alte Buchung
+        RAISE_APPLICATION_ERROR(-20001,
+          'Fahrzeug mit Kennzeichen ' || p_kennzeichen || ' ist unbekannt.');
+      END IF;
+
+    END berechnemaut;
 
 END maut_service;
 /
